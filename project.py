@@ -113,16 +113,17 @@ for epoch in range(50):
         inputs, targets = Variable(inputs), Variable(targets)
         outputs = model(inputs)
         cross_entropy_loss = F.cross_entropy(outputs, targets)
-        #l1_regularization = lambda1 * sum([l1_penalty(param.data) for param in model.parameters()])
-        #l2_regularization = lambda2 * l2_penalty(layer2_out)
-        
+        l1_regularization = lambda1 * sum([l1_penalty(param.data) for param in model.parameters()])
+        # l2_regularization = lambda2 * l2_penalty(layer2_out)
+        '''
         l1_crit = nn.L1Loss(size_average=False)
         reg_loss = 0
         for param in model.parameters():
             reg_loss += l1_crit(param)
         l1_regularization = lambda1 * reg_loss
+        '''
         loss = cross_entropy_loss + l1_regularization# + l2_regularization
-
+        
         loss.backward()
         #optimizer.step()
 
