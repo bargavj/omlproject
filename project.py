@@ -1,12 +1,13 @@
 from __future__ import print_function
+from torch.autograd import Variable
 import time
 import numpy as np
+import copy
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.init as init
 import torch.nn.functional as F
-from torch.autograd import Variable
 import torchvision
 import torchvision.transforms as transforms
 import torchvision.models as models
@@ -67,10 +68,10 @@ def l1_penalty(var):
 def sparsify(param, sparsity):
     return F.hardshrink(param, sparsity).data
        
-#model = MLP()
-model = CNN()
+model = MLP()
+#model = CNN()
 
-optimizer = torch.optim.SGD(model.parameters(), lr)
+optimizer = torch.optim.Adam(model.parameters(), lr)
 
 for epoch in range(10):
     losses = []
@@ -107,23 +108,25 @@ for epoch in range(10):
     print('--------------------------------------------------------------')
     model.train()
 
-for param in model.parameters():
+model2 = copy.deepcopy(model)
+
+for param in model2.parameters():
     param.data = sparsify(param, 0.01)
 
 cnt, tot = 0, 0
-for param in model.parameters():
+for param in model2.parameters():
     tot += param.data.view(-1).size()[0]
     for val in param.data.view(-1):
         if val == 0.:
             cnt += 1
 print(str(cnt*100./tot) + "% sparse")
 
-model.eval()
+model2.eval()
 total = 0
 correct = 0
 for batch_idx, (inputs, targets) in enumerate(testloader):
     inputs, targets = Variable(inputs, volatile=True), Variable(targets, volatile=True)
-    outputs = model(inputs)
+    outputs = model2(inputs)
     _, predicted = torch.max(outputs.data, 1)
     total += targets.size(0)
     correct += predicted.eq(targets.data).cpu().sum()
