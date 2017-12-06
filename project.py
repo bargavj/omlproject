@@ -16,12 +16,13 @@ transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5
 mnist_train = torchvision.datasets.MNIST(root='./data', train=True, transform=transform, download=True)
 mnist_test = torchvision.datasets.MNIST(root='./data', train=False, transform=transform, download=True)
 
-trainloader = torch.utils.data.DataLoader(mnist_train, batch_size=128, shuffle=True, num_workers=2)
-testloader = torch.utils.data.DataLoader(mnist_test, batch_size=128, shuffle=True, num_workers=2)
+trainloader = torch.utils.data.DataLoader(mnist_train, batch_size=128, shuffle=False, num_workers=2)
+testloader = torch.utils.data.DataLoader(mnist_test, batch_size=128, shuffle=False, num_workers=2)
 
 batchsize = 128
 lambda1 = 0.01
 lr = 1e-3
+threshold = 0.05
 
 
 class MLP(nn.Module):
@@ -68,15 +69,23 @@ def l1_penalty(var):
 def sparsify(param, sparsity):
     return F.hardshrink(param, sparsity).data
        
-model = MLP()
-#model = CNN()
+# model = MLP()
+model = CNN()
 
 optimizer = torch.optim.Adam(model.parameters(), lr)
 
-for epoch in range(10):
+
+trials = 10
+for epoch in range(trials):
     losses = []
     # Train
     for batch_idx, (inputs, targets) in enumerate(trainloader):
+
+        # sparsifying the params at every step:
+        currentThreshold = (epoch/trials)*threshold
+        for param in model.parameters():
+          param.data = sparsify(param, currentThreshold)
+
         optimizer.zero_grad()
         model.zero_grad()
         inputs, targets = Variable(inputs), Variable(targets)
@@ -86,13 +95,17 @@ for epoch in range(10):
 
         loss = cross_entropy_loss# + l1_regularization
         
+
+        
         loss.backward()
         optimizer.step()
+
+
       
         losses.append(loss.data[0])
 
     print('Epoch : %d Loss : %.3f ' % (epoch, np.mean(losses)))
-    
+        
     # Test
     model.eval()
     total = 0
@@ -108,10 +121,13 @@ for epoch in range(10):
     print('--------------------------------------------------------------')
     model.train()
 
+for param in model.parameters():
+          param.data = sparsify(param, threshold)
+
 model2 = copy.deepcopy(model)
 
-for param in model2.parameters():
-    param.data = sparsify(param, 0.01)
+# for param in model2.parameters():
+     # param.data = sparsify(param, threshold)
 
 cnt, tot = 0, 0
 for param in model2.parameters():
