@@ -22,7 +22,7 @@ testloader = torch.utils.data.DataLoader(mnist_test, batch_size=128, shuffle=Fal
 batchsize = 128
 lambda1 = 0.01
 lr = 1e-3
-trials = 3
+trials = 50
 
 
 class MLP(nn.Module):
