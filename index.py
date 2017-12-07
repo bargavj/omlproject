@@ -3,7 +3,7 @@ import copy
 
 architectures = ["MLP", "CNN"]
 thresholds = [0, 0.01, 0.025, 0.05, 0.1]
-algorithms = ["Adam", "SGD"]
+algorithms = ["Adam", "SGD", "Adamax", "RMSprop"]
 modes = ["intrain", "posttrain"]
 
 
@@ -61,3 +61,4 @@ for arch in architectures:
 				f = open('outputData.json', 'w')
 				f.write(str(results.resultsData))
 				f.close()
+
