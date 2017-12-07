@@ -22,7 +22,7 @@ testloader = torch.utils.data.DataLoader(mnist_test, batch_size=128, shuffle=Fal
 batchsize = 128
 lambda1 = 0.01
 lr = 1e-3
-threshold = 0.05
+trials = 3
 
 
 class MLP(nn.Module):
@@ -69,82 +69,118 @@ def l1_penalty(var):
 def sparsify(param, sparsity):
     return F.hardshrink(param, sparsity).data
        
-# model = MLP()
-model = CNN()
+def train(model, optimizer, mode, threshold):
+    print("training.. ")
+    accuracies = []
+    for epoch in range(trials):
+        losses = []
+        # Train
 
-optimizer = torch.optim.Adam(model.parameters(), lr)
+        for batch_idx, (inputs, targets) in enumerate(trainloader):
 
+            # sparsifying the params at every step when mode = intrain:
+            if(mode == "intrain"):
+                currentThreshold = (epoch/trials)*threshold
+                for param in model.parameters():
+                    param.data = sparsify(param, currentThreshold)
 
-trials = 10
-for epoch in range(trials):
-    losses = []
-    # Train
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
+            optimizer.zero_grad()
+            model.zero_grad()
+            inputs, targets = Variable(inputs), Variable(targets)
+            outputs = model(inputs)
+            cross_entropy_loss = F.cross_entropy(outputs, targets)
+            #l1_regularization = lambda1 * sum([l1_penalty(param.data) for param in model.parameters()])
 
-        # sparsifying the params at every step:
-        currentThreshold = (epoch/trials)*threshold
-        for param in model.parameters():
-          param.data = sparsify(param, currentThreshold)
+            loss = cross_entropy_loss# + l1_regularization
+            
 
-        optimizer.zero_grad()
-        model.zero_grad()
-        inputs, targets = Variable(inputs), Variable(targets)
-        outputs = model(inputs)
-        cross_entropy_loss = F.cross_entropy(outputs, targets)
-        #l1_regularization = lambda1 * sum([l1_penalty(param.data) for param in model.parameters()])
-
-        loss = cross_entropy_loss# + l1_regularization
-        
-
-        
-        loss.backward()
-        optimizer.step()
+            
+            loss.backward()
+            optimizer.step()
 
 
-      
-        losses.append(loss.data[0])
+          
+            losses.append(loss.data[0])
 
-    print('Epoch : %d Loss : %.3f ' % (epoch, np.mean(losses)))
-        
-    # Test
-    model.eval()
+        print('Epoch : %d Loss : %.3f ' % (epoch, np.mean(losses)))
+            
+        # Test
+        model.eval()
+        total = 0
+        correct = 0
+        for batch_idx, (inputs, targets) in enumerate(testloader):
+            inputs, targets = Variable(inputs, volatile=True), Variable(targets, volatile=True)
+            outputs = model(inputs)
+            _, predicted = torch.max(outputs.data, 1)
+            total += targets.size(0)
+            correct += predicted.eq(targets.data).cpu().sum()
+
+        accuracy = (100.*correct/total)
+        print('Epoch : %d Test Acc : %.3f' % (epoch, accuracy))
+        print('--------------------------------------------------------------')
+        accuracies.append(accuracy)
+        model.train()
+
+    #Sparsify the final model irrespective of mode. The intrain mode runs only from 0 to 9, so this will add the final sparcification:
+    for param in model.parameters():
+              param.data = sparsify(param, threshold)
+
+    return accuracies
+
+
+def test(model2):
+    print("Testing")
+    cnt, tot = 0, 0
+    for param in model2.parameters():
+        tot += param.data.view(-1).size()[0]
+        for val in param.data.view(-1):
+            if val == 0.:
+                cnt += 1
+    sparselevel = cnt*100./tot
+    print(str(sparselevel) + "% sparse")
+
+    model2.eval()
     total = 0
     correct = 0
     for batch_idx, (inputs, targets) in enumerate(testloader):
         inputs, targets = Variable(inputs, volatile=True), Variable(targets, volatile=True)
-        outputs = model(inputs)
+        outputs = model2(inputs)
         _, predicted = torch.max(outputs.data, 1)
         total += targets.size(0)
         correct += predicted.eq(targets.data).cpu().sum()
 
-    print('Epoch : %d Test Acc : %.3f' % (epoch, 100.*correct/total))
-    print('--------------------------------------------------------------')
-    model.train()
+    testaccuracy = 100.*correct/total
+    print('Test Accuracy : %.3f' % (testaccuracy))
+    return sparselevel, (100.*correct/total)
 
-for param in model.parameters():
-          param.data = sparsify(param, threshold)
+def getModel(modelType):
+    if(modelType == "MLP"):
+        return MLP()
+    else:
+        return CNN()
 
-model2 = copy.deepcopy(model)
 
-# for param in model2.parameters():
-     # param.data = sparsify(param, threshold)
+def main(model, algorithm="Adam", mode="intrain", threshold=0):
+    # threshold = thresholdParam
+    
 
-cnt, tot = 0, 0
-for param in model2.parameters():
-    tot += param.data.view(-1).size()[0]
-    for val in param.data.view(-1):
-        if val == 0.:
-            cnt += 1
-print(str(cnt*100./tot) + "% sparse")
+    #Choose optimizer:
+    optimizerfunction = getattr(torch.optim, algorithm)
+    optimizer = optimizerfunction(model.parameters(), lr)
 
-model2.eval()
-total = 0
-correct = 0
-for batch_idx, (inputs, targets) in enumerate(testloader):
-    inputs, targets = Variable(inputs, volatile=True), Variable(targets, volatile=True)
-    outputs = model2(inputs)
-    _, predicted = torch.max(outputs.data, 1)
-    total += targets.size(0)
-    correct += predicted.eq(targets.data).cpu().sum()
+    if(mode == "posttrain" and threshold != 0):
+        # INCASE OF POSTTRAIN, we only need to train the first(threshold > 0) model:
+        trainingAccuracies = []
+        model2 = copy.deepcopy(model)
+        #Sparsify the final model irrespective of mode. The intrain mode runs only from 0 to 9, so this will add the final sparcification:
+        for param in model2.parameters():
+                  param.data = sparsify(param, threshold)
+    else:
+        # IN CASE of pretrain, all the models will be trained.
+        trainingAccuracies = train(model, optimizer, mode, threshold)
+        model2 = copy.deepcopy(model)
+    
 
-print('Test Accuracy : %.3f' % (100.*correct/total))
+    sparselevel, testaccuracy = test(model2)
+
+    return trainingAccuracies, sparselevel, testaccuracy
