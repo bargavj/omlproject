@@ -2,7 +2,7 @@ import project
 import copy
 
 architectures = ["MLP", "CNN"]
-thresholds = [0, 0.01, 0.05, 0.1]
+thresholds = [0, 0.01, 0.025, 0.05, 0.1]
 algorithms = ["Adam", "SGD"]
 modes = ["intrain", "posttrain"]
 
@@ -42,6 +42,9 @@ for arch in architectures:
 	for algo in algorithms:
 		for mode in modes:
 			for threshold in thresholds:
+				if(mode == "intrain" and threshold == 0):
+					continue
+
 				print("\n\n=================== * === * === * ======================")
 				print("Calling with: " + arch + " " +  str(threshold) + " " + algo + " " +mode + "\n")
 
@@ -55,8 +58,6 @@ for arch in architectures:
 
 				results.save(arch, algo, mode, threshold, sparselevel, testaccuracy, TrainingAccuracies)
 
-project.main();
-
-f = open('outputData.json', 'w')
-f.write(str(results.resultsData))
-f.close()
+				f = open('outputData.json', 'w')
+				f.write(str(results.resultsData))
+				f.close()

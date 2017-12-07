@@ -174,7 +174,7 @@ def main(model, algorithm="Adam", mode="intrain", threshold=0):
         model2 = copy.deepcopy(model)
         #Sparsify the final model irrespective of mode. The intrain mode runs only from 0 to 9, so this will add the final sparcification:
         for param in model2.parameters():
-                  param.data = sparsify(param, threshold)
+            param.data = sparsify(param, threshold)
     else:
         # IN CASE of pretrain, all the models will be trained.
         trainingAccuracies = train(model, optimizer, mode, threshold)
